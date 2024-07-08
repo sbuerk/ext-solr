@@ -17,6 +17,8 @@ namespace ApacheSolrForTypo3\Solr\Domain\Index;
 
 use ApacheSolrForTypo3\Solr\ConnectionManager;
 use ApacheSolrForTypo3\Solr\Domain\Site\Site;
+use ApacheSolrForTypo3\Solr\FileAbstractionLayer\CommandLineIndexingPublicUrlPrefixer;
+use ApacheSolrForTypo3\Solr\FrontendEnvironment\Tsfe;
 use ApacheSolrForTypo3\Solr\IndexQueue\Indexer;
 use ApacheSolrForTypo3\Solr\IndexQueue\Item;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
@@ -29,6 +31,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
 use TYPO3\CMS\Extbase\SignalSlot\Exception\InvalidSlotException;
 use TYPO3\CMS\Extbase\SignalSlot\Exception\InvalidSlotReturnException;
+use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
 /**
  * Service to perform indexing operations
@@ -63,22 +66,31 @@ class IndexService
     protected SolrLogManager $logger;
 
     /**
+     * @var CommandLineIndexingPublicUrlPrefixer
+     */
+    protected CommandLineIndexingPublicUrlPrefixer $commandLineIndexingPublicUrlPrefixer;
+
+    /**
      * IndexService constructor.
      * @param Site $site
      * @param Queue|null $queue
      * @param Dispatcher|null $dispatcher
      * @param SolrLogManager|null $solrLogManager
+     * @param CommandLineIndexingPublicUrlPrefixer|null $commandLineIndexingPublicUrlPrefixer
      */
     public function __construct(
         Site $site,
         Queue $queue = null,
         Dispatcher $dispatcher = null,
-        SolrLogManager $solrLogManager = null
+        SolrLogManager $solrLogManager = null,
+        CommandLineIndexingPublicUrlPrefixer $commandLineIndexingPublicUrlPrefixer = null
     ) {
         $this->site = $site;
         $this->indexQueue = $queue ?? GeneralUtility::makeInstance(Queue::class);
         $this->signalSlotDispatcher = $dispatcher ?? GeneralUtility::makeInstance(Dispatcher::class);
         $this->logger = $solrLogManager ?? GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
+        $this->commandLineIndexingPublicUrlPrefixer = $commandLineIndexingPublicUrlPrefixer ?? GeneralUtility::makeInstance(CommandLineIndexingPublicUrlPrefixer::class);
+        $this->setTypoScriptFrontendControllerToCommandLineIndexingPublicUrlPrefixer($site);
     }
 
     /**
@@ -310,5 +322,24 @@ class IndexService
 
         // needed since TYPO3 7.5
         GeneralUtility::flushInternalRuntimeCaches();
+    }
+
+    /**
+     * This method sets the root site as current TypoScriptFrontendController to the
+     * CommandLineIndexingPublicUrlPrefixer to ensure that during CLI indexing public
+     * urls are properly prefixed like it would be done in the frontend.
+     *
+     * @param Site $site
+     * @throws \ApacheSolrForTypo3\Solr\FrontendEnvironment\Exception\Exception
+     * @throws \Doctrine\DBAL\Driver\Exception
+     * @throws \TYPO3\CMS\Core\Exception\SiteNotFoundException
+     */
+    private function setTypoScriptFrontendControllerToCommandLineIndexingPublicUrlPrefixer(Site $site): void
+    {
+        $typoScriptFontendController = GeneralUtility::makeInstance(Tsfe::class)
+            ->getTsfeByPageIdAndLanguageId($this->site->getRootPageId());
+        if ($typoScriptFontendController instanceof TypoScriptFrontendController) {
+            $this->commandLineIndexingPublicUrlPrefixer->setCurrentFrontendController($typoScriptFontendController);
+        }
     }
 }

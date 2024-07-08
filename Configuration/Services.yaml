@@ -144,3 +144,9 @@ services:
       - name: event.listener
         identifier: 'solr.index.pageIndexer.FrontendUserAuthenticator'
         event: TYPO3\CMS\Frontend\Authentication\ModifyResolvedFrontendGroupsEvent
+  ApacheSolrForTypo3\Solr\FileAbstractionLayer\CommandLineIndexingPublicUrlPrefixer:
+    tags:
+      - name: event.listener
+        identifier: 'solr.index.commandline.publicurlprefixer'
+        event: TYPO3\CMS\Core\Resource\Event\GeneratePublicUrlForResourceEvent
+        method: 'prefixWithAbsRefPrefix'
